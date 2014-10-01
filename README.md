@@ -13,8 +13,14 @@ vulnerability.
 usage
 =====
 
-Just run script:
- `./bashcheck`
+```sh
+./bashcheck [path-to-bash-binary] [--nostrict]
+```
+
+It will exit with 0 (zero -- success) when no vulnerabilities are found.
+
+If ```--nostrict``` is specified, it will exit with 0 (zero) if all known
+patches are working.  (As of October 1, 2014, CVE-2014-6277 had no fix.)
 
 CVE-2014-6271
 =============
