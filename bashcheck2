@@ -1,0 +1,128 @@
+#!/bin/bash
+
+red() {
+  echo -en "\033[91m"
+}
+
+green() {
+  echo -en "\033[92m"
+}
+
+[ -n "$1" ] && bash=$(which $1) || bash=$(which bash)
+
+echo -e "\033[95mTesting $bash ..."
+echo $($bash --version | head -n 1)
+echo -e "\033[39m"
+
+#-------------------------------------------------------------------------------------
+#   10 out of 10
+#-------------------------------------------------------------------------------------
+
+echo -e "\033[95mChecking the most-severe cases (10 out of 10 severity)...\033[39m"
+echo
+
+r=`env x="() { :; }; echo x" $bash -c "" 2>/dev/null`
+if [ -n "$r" ]; then
+  echo -e "    \033[91mVulnerable to CVE-2014-6271 (original shellshock)\033[39m"
+else
+  echo -e "    \033[92mNot vulnerable to CVE-2014-6271 (original shellshock)\033[39m"
+fi
+
+if [ -n "$(env x='() { _;}>_[$($())] { echo x;}' $bash -c : 2>/dev/null)" ]; then
+  echo -e "    \033[91mVulnerable to CVE-2014-6278 (lcamtuf bug #2) [no prefix/suffix]\033[39m"
+else
+  echo -e "    \033[92mNot vulnerable to remote exploitation of CVE-2014-6278 (lcamtuf bug #2) [no prefix/suffix]\033[39m"
+fi
+
+have_catch_all_fix=0
+r=`a="() { echo x;}" $bash -c a 2>/dev/null`
+if [ -n "$r" ]; then
+  echo -e "    \033[91mVariable function parser still active, maybe vulnerable to yet-to-be-found, but sure-to-be-SEVERE parser bugs\033[39m"
+else
+  have_catch_all_fix=1
+  echo -e "    \033[92mVariable function parser inactive, likely safe from yet-to-be-found parser bugs\033[39m"
+fi
+
+#-------------------------------------------------------------------------------------
+#   Possible 10 out of 10
+#-------------------------------------------------------------------------------------
+
+echo
+echo -e "\033[95mChecking for lcamtuf bug #2 (possible 10 out of 10).  Allows remote code execution, but\033[39m"
+echo -e "\033[95mis prevented if you have disabled the parser.\033[39m"
+echo
+
+if [ -n "$(env BASH_FUNC_x%%='() { _;}>_[$($())] { echo x;}' $bash -c : 2>/dev/null)" ]; then
+  if [[ $have_catch_all_fix == 0 ]]; then
+    red;
+    echo -e "    Vulnerable to CVE-2014-6278 (lcamtuf bug #2) [prefix/%%-suffix]\033[39m"
+  else
+    green;
+    echo -e "    Vulnerable to CVE-2014-6278 (lcamtuf bug #2) [prefix/%%-suffix] -- but not remotely exploitable because parser is inactive.\033[39m"
+  fi
+elif [ -n "$(env 'BASH_FUNC_x()'='() { _;}>_[$($())] { echo x;}' $bash -c : 2>/dev/null)" ]; then
+  if [[ $have_catch_all_fix == 0 ]]; then
+    red;
+    echo -e "    Vulnerable to CVE-2014-6278 (lcamtuf bug #2) [prefix/()-suffix]\033[39m"
+  else
+    green;
+    echo -e "    Vulnerable to CVE-2014-6278 (lcamtuf bug #2) [prefix/()-suffix] -- but not remotely exploitable because parser is inactive.\033[39m"
+  fi
+else
+  echo -e "    \033[92mNot vulnerable to CVE-2014-6278 (lcamtuf bug #2)\033[39m"
+fi
+
+#-------------------------------------------------------------------------------------
+#   9 out of 10
+#-------------------------------------------------------------------------------------
+
+echo
+echo -e "\033[95mChecking for lcamtuf bug #1 ('only' 9 out of 10).  Possibly allows remote code execution, but\033[39m"
+echo -e "\033[95mthere are no known proofs-of-concept that demonstrate remote code execution, and security experts\033[39m"
+echo -e "\033[95mthink it will require significant expertise to develop an exploit.  There is currently no known patch.\033[39m"
+echo
+
+$($bash -c "f(){ x(){ _;};x(){ _;}<<a;}" 2>/dev/null)
+if [ $? != 0 ]; then
+  echo -e "    \033[91mVulnerable to CVE-2014-6277 (lcamtuf bug #1) <----- There is currently no fix for this :(\033[39m"
+else
+  echo -e "    \033[92mNot vulnerable to CVE-2014-6277 (lcamtuf bug #1)\033[39m"
+fi
+
+#-------------------------------------------------------------------------------------
+#   Other bugs found
+#-------------------------------------------------------------------------------------
+
+echo
+echo -e "\033[95mChecking for fixes to faulty code; (but that does not allow remote code execution)...\033[39m"
+echo -e "\033[95m[These bugs were found during the shellshock firedrill, and provided evidence that the\033[39m"
+echo -e "\033[95mparser should be kept from parsing function-in-environment-variables altogether.]\033[39m"
+echo
+
+# Allows creation of file.
+cd /tmp;rm echo 2>/dev/null
+env x='() { function a a>\' $bash -c echo 2>/dev/null > /dev/null
+if [ -e echo ]; then
+  echo -e "    \033[91mVulnerable to CVE-2014-7169 (taviso bug)\033[39m"
+else
+  echo -e "    \033[92mNot vulnerable to CVE-2014-7169 (taviso bug)\033[39m"
+fi
+
+# Crash bash on overflow; not generally exploitable
+$($bash -c "true $(printf '<<EOF %.0s' {1..80})" 2>/tmp/bashcheck.tmp)
+ret=$?
+grep -q AddressSanitizer /tmp/bashcheck.tmp
+if [ $? == 0 ] || [ $ret == 139 ]; then
+  echo -e "    \033[91mVulnerable to CVE-2014-7186 (redir_stack bug)\033[39m"
+else
+  echo -e "    \033[92mNot vulnerable to CVE-2014-7186 (redir_stack bug)\033[39m"
+fi
+
+$bash -c "`for i in {1..200}; do echo -n "for x$i in; do :;"; done; for i in {1..200}; do echo -n "done;";done`" 2>/dev/null
+if [ $? != 0 ]; then
+  echo -e "    \033[91mVulnerable to CVE-2014-7187 (nested loops off by one)\033[39m"
+else
+  echo -e "    \033[96mTest for CVE-2014-7187 not reliable without address sanitizer\033[39m"
+fi
+
+
