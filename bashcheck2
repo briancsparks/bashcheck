@@ -125,4 +125,12 @@ else
   echo -e "    \033[96mTest for CVE-2014-7187 not reliable without address sanitizer\033[39m"
 fi
 
+echo
+echo
+echo "-----------------------------------------------------------------------------"
+echo "  This script is out-of-date, but remains here for historical purposes. "
+echo "     Use "./bashcheck" instead "
+echo "-----------------------------------------------------------------------------"
+
+
 
